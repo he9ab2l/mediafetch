@@ -46,3 +46,23 @@
 
 没有现成项目能覆盖 Threads 的全部媒体类型。图片和 inline 贴图必须自己解析页面载荷，
 故 mediafetch 自建；视频场景若需要 DASH 分轨，可另外调 yt-dlp 补充。
+
+## 2026-10 追加：回复 / 引用 / 翻页
+
+用 `share/_mh6deE_V/`（串文，声称 160 条回复）实测。
+
+| 能力 | 结果 |
+|---|---|
+| 首屏回复 | 13 条，其中 3 条带媒体 |
+| GraphQL 翻页 | 能翻到第 2 页，累计约 20 条 |
+| 翻页 node 的媒体 | `image_versions2.candidates` 为空，需逐条打开 `/t/{code}` |
+| 引用块媒体 | ✅ 完整，实测 4096×4096 原图 |
+| 回复里的贴图 | ✅ 正常 |
+
+关键参数：
+- cursor 取 `data.media.text_post_app_info.direct_replies.page_info.end_cursor`
+- `sortOrder` 必须 `RECENT`（`TOP` 只有 6 条且 cursor 走不下去）
+- `doc_id` 和 `LSD` 从页面 `data-sjs` 的 preloader 里取，每个帖子可能不同
+
+第三方站 `threadsdownloader.com` 已停服：`api-tp.threadsdownloader.com/threads/post/media`
+对任何 id 都返回 `threadsdownloader-nolongerworks.png`。

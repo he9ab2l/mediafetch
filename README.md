@@ -35,8 +35,9 @@ python3 -m mediafetch "https://www.threads.com/@natgeo/post/Dej74BIESJL"
 # 下载单帖
 python3 -m mediafetch "https://www.threads.com/share/BAHAMIdLaB/" --dl --out ./out
 
-# 连回复一起（页面首屏可见的那部分）
+# 连回复一起（含 GraphQL 翻页 + 引用块，逐条取媒体，较慢）
 python3 -m mediafetch "<url>" --replies --dl --out ./out
+python3 -m mediafetch "<url>" --replies --reply-pages 10   # 控制翻页上限
 
 # 抓账号时间线里带媒体的帖子
 python3 -m mediafetch "@zhongjie397" --dl --out ./out --limit 20
@@ -49,6 +50,9 @@ python3 -m mediafetch "https://www.threads.com/@natgeo/post/DerqevDDeVV" --json
 
 输出文件名：`{code}_{n}.{jpg|mp4|webp}`、`{code}_sticker_{n}_{giphyId}.gif`。
 
+同一媒体 URL 和同一 giphy 贴图 id 会跨记录去重（回复与它的引用块常指向同一条帖子），
+重复项打印 `(重复，已跳过)`。
+
 ## 原理
 
 1. 普通浏览器 UA 访问 Threads 只会拿到 JS 登录墙，HTML 里 0 个媒体 URL。
@@ -57,19 +61,24 @@ python3 -m mediafetch "https://www.threads.com/@natgeo/post/DerqevDDeVV" --json
 3. 递归找出带 `code` + `image_versions2`/`video_versions`/`carousel_media` 的节点，
    **用短码匹配目标帖**——不能取「页面第一个视频」，那通常是推荐内容。
 4. inline 贴图不在媒体字段里：走 `text_post_app_info.text_fragments[].inline_sticker_fragment`
-   拿 `sticker_id`，下载用 `https://i.giphy.com/{id}.gif`。
-5. 图片取 `candidates` 里 `width` 最大的一项，跳过头像和 `s150x150` 缩略图
+   拿 `sticker_id`，下载优先 `media.giphy.com/media/{id}/source.gif`（原图），
+   回退 `i.giphy.com/{id}.gif`。
+5. 引用/转发：`text_post_app_info.share_info.quoted_post` / `reposted_post`
+   自带完整媒体字段，能拿到 4096×4096 原图。
+6. 回复翻页：`POST https://www.threads.com/api/graphql`，`doc_id` 和 `LSD`
+   从页面 preloader 里取。cursor 必须用
+   `data.media.text_post_app_info.direct_replies.page_info.end_cursor`，
+   `sortOrder` 设 `RECENT`（`TOP` 的 cursor 走不下去）。翻页返回的 node
+   媒体字段是空的，要逐条打开 `/t/{code}` 才能取到。
+7. 图片取 `candidates` 里 `width` 最大的一项，跳过头像和 `s150x150` 缩略图
    （第三方站有直接返回 150×150 的 bug）。
-6. 贴图默认下载 `source.gif`（giphy 原图），失败才回退 `i.giphy.com`。
-   实测同一张：默认 480×407 / 1.6MB，source 1002×850 / 5.4MB；
-   大图能到 3360×3360。
 
 ## 已知限制
 
-1. **回复只有页面首屏**：Meta 只把前十几条回复渲染进载荷，其余要 GraphQL 翻页
-   （`BarcelonaPostPageDownwardQuery` 的 `doc_id` 频繁更换）。`--replies` 会打印
-   `已取/声称总数`，例如 `11/26`，别把 11 当全部。
-2. 账号模式同样只到首屏（约 18 帖），原因相同。
+1. **回复覆盖不全**：翻页实测只能走到第 2 页左右，一个 160 回复的串文能取到约 20 条。
+   `--replies` 会打印 `已取/声称总数`，例如 `18/160`，别把 18 当全部。
+2. **账号时间线翻不了**：`BarcelonaProfileThreadsTabDirectQuery` 返回
+   `has_next_page: false`，`first=15/30/50` 都无效。只能拿首屏约 26 帖。
 3. 只能抓公开帖子；私号即使爬虫 UA 也拿不到。
 4. 唯一脆弱点：Meta 若停止给爬虫 UA 全量渲染，抓取会失效。
 

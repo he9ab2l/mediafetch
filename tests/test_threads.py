@@ -101,6 +101,31 @@ def test_replies_excludes_root_and_non_replies():
     assert out[0]['media'][0]['url'] == 'https://cdn/r1.jpg'
 
 
+def test_quoted_post_extracted():
+    quoted = {'code': 'Q1', 'media_type': 8, 'caption': {'text': 'q'},
+              'carousel_media': [
+                  {'image_versions2': {'candidates': [{'width': 900, 'url': 'https://cdn/q1.jpg'}]}},
+                  {'video_versions': [{'url': 'https://cdn/q2.mp4'}]},
+              ]}
+    post = {'code': 'R1', 'text_post_app_info': {'share_info': {'quoted_post': quoted}}}
+    out = threads.quoted_of(post)
+    assert len(out) == 1
+    assert out[0]['kind'] == 'quoted_post'
+    assert [m['type'] for m in out[0]['media']] == ['image', 'video']
+
+
+def test_quoted_skips_empty():
+    post = {'code': 'R2', 'text_post_app_info': {'share_info': {'quoted_post': {'code': None}}}}
+    assert threads.quoted_of(post) == []
+
+
+def test_next_cursor_only_from_direct_replies():
+    payload = {'data': {'media': {'text_post_app_info': {
+        'direct_replies': {'page_info': {'end_cursor': 'CUR', 'has_next_page': True}}}}}}
+    assert threads._next_cursor(payload) == 'CUR'
+    assert threads._next_cursor({'data': {'media': {}}}) is None
+
+
 def test_claimed_replies():
     assert threads._claimed_replies('..."direct_reply_count":26,...') == 26
     assert threads._claimed_replies('nothing here') is None
