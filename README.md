@@ -35,6 +35,9 @@ python3 -m mediafetch "https://www.threads.com/@natgeo/post/Dej74BIESJL"
 # 下载单帖
 python3 -m mediafetch "https://www.threads.com/share/BAHAMIdLaB/" --dl --out ./out
 
+# 连回复一起（页面首屏可见的那部分）
+python3 -m mediafetch "<url>" --replies --dl --out ./out
+
 # 抓账号时间线里带媒体的帖子
 python3 -m mediafetch "@zhongjie397" --dl --out ./out --limit 20
 
@@ -60,10 +63,12 @@ python3 -m mediafetch "https://www.threads.com/@natgeo/post/DerqevDDeVV" --json
 
 ## 已知限制
 
-1. 账号模式只到首屏（约 18 帖）。翻页要 `BarcelonaPostPageDownwardQuery` 的 `doc_id`，
-   Meta 频繁更换，暂不实现。
-2. 只能抓公开帖子；私号即使爬虫 UA 也拿不到。
-3. 唯一脆弱点：Meta 若停止给爬虫 UA 全量渲染，抓取会失效。
+1. **回复只有页面首屏**：Meta 只把前十几条回复渲染进载荷，其余要 GraphQL 翻页
+   （`BarcelonaPostPageDownwardQuery` 的 `doc_id` 频繁更换）。`--replies` 会打印
+   `已取/声称总数`，例如 `11/26`，别把 11 当全部。
+2. 账号模式同样只到首屏（约 18 帖），原因相同。
+3. 只能抓公开帖子；私号即使爬虫 UA 也拿不到。
+4. 唯一脆弱点：Meta 若停止给爬虫 UA 全量渲染，抓取会失效。
 
 ## 加新平台
 

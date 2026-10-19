@@ -76,3 +76,31 @@ def test_biggest_image_skips_rsrc():
         {'width': 800, 'url': 'https://cdn/real.jpg'},
     ]}}
     assert threads.media_of(post)[0]['url'] == 'https://cdn/real.jpg'
+
+
+def test_record_flags_reply():
+    root = {'code': 'R', 'image_versions2': {'candidates': []},
+            'text_post_app_info': {'is_reply': False}}
+    reply = {'code': 'X', 'image_versions2': {'candidates': []},
+             'text_post_app_info': {'is_reply': True}}
+    assert threads._record(root, 'u')['is_reply'] is False
+    assert threads._record(reply, 'u')['is_reply'] is True
+
+
+def test_replies_excludes_root_and_non_replies():
+    nodes = [
+        {'code': 'ROOT', 'image_versions2': {'candidates': []},
+         'text_post_app_info': {'is_reply': False}},
+        {'code': 'R1', 'image_versions2': {'candidates': [{'width': 800, 'url': 'https://cdn/r1.jpg'}]},
+         'text_post_app_info': {'is_reply': True}},
+        {'code': 'REC', 'image_versions2': {'candidates': [{'width': 800, 'url': 'https://cdn/rec.jpg'}]},
+         'text_post_app_info': {'is_reply': False}},
+    ]
+    out = threads._replies(nodes, 'ROOT')
+    assert [r['code'] for r in out] == ['R1']
+    assert out[0]['media'][0]['url'] == 'https://cdn/r1.jpg'
+
+
+def test_claimed_replies():
+    assert threads._claimed_replies('..."direct_reply_count":26,...') == 26
+    assert threads._claimed_replies('nothing here') is None

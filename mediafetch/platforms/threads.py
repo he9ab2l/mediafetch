@@ -60,12 +60,14 @@ def caption_of(post):
 
 
 def _record(post, url):
+    info = post.get('text_post_app_info') or {}
     return {
         'platform': 'threads',
         'code': post.get('code'),
         'url': url,
         'media_type': post.get('media_type'),
         'caption': caption_of(post),
+        'is_reply': bool(info.get('is_reply')),
         'media': media_of(post),
         'stickers': stickers_of(post),
     }
@@ -78,10 +80,33 @@ def post(url):
     if not m:
         raise SystemExit(f'不是帖子链接：{url}')
     code = m.group(1)
-    hits = [p for p in unique_posts(html) if p.get('code') == code]
+    nodes = unique_posts(html)
+    hits = [p for p in nodes if p.get('code') == code]
     if not hits:
         raise SystemExit(f'帖子 {code} 不在页面载荷里')
-    return _record(hits[0], final)
+    root = _record(hits[0], final)
+    root['replies'] = _replies(nodes, code)
+    root['reply_count_claimed'] = _claimed_replies(html)
+    return root
+
+
+def _replies(nodes, root_code):
+    """页面首屏里能看到的回复（Threads 只给一小段，非全量）。"""
+    out = []
+    for p in nodes:
+        if p.get('code') == root_code:
+            continue
+        info = p.get('text_post_app_info') or {}
+        if not info.get('is_reply'):
+            continue
+        rec = _record(p, f'https://www.threads.com/t/{p.get("code")}')
+        out.append(rec)
+    return out
+
+
+def _claimed_replies(html):
+    m = re.search(r'"direct_reply_count":(\d+)', html)
+    return int(m.group(1)) if m else None
 
 
 def profile(handle, limit=50):
