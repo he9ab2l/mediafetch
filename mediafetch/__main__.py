@@ -5,7 +5,7 @@ import os
 import re
 import sys
 
-from .core import download
+from .core import download, merge_av
 from .registry import PLATFORMS, detect
 
 
@@ -42,8 +42,19 @@ def _emit(rec, outdir, seen):
             print(f"   {item['type']}\t{item['width']}x{item['height']}\t(重复，已跳过)")
             continue
         print(f"   {item['type']}\t{item['width']}x{item['height']}\t{item['url'][:100]}")
-        if outdir:
-            path, size = download(item['url'], outdir, f"{rec['code']}_{i + 1}")
+        if not outdir:
+            continue
+        prefix = f"{rec['code']}_{i + 1}"
+        merged = None
+        if item['type'] == 'video' and item.get('dash_video') and item.get('dash_audio'):
+            try:
+                merged = merge_av(item['dash_video'], item['dash_audio'], outdir, prefix)
+            except Exception as e:
+                print(f'   merge failed: {e}')
+        if merged:
+            print(f'   saved\t{merged[0]}\t{merged[1]}\t(DASH 合流)')
+        else:
+            path, size = download(item['url'], outdir, prefix)
             print(f'   saved\t{path}\t{size}')
 
     for i, sticker in enumerate(rec['stickers']):

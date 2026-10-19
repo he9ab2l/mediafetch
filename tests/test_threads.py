@@ -30,8 +30,12 @@ def test_media_video():
     post = {'code': 'BBB', 'media_type': 2,
             'video_versions': [{'url': 'https://cdn/v.mp4'}]}
     media = threads.media_of(post)
-    assert media == [{'type': 'video', 'url': 'https://cdn/v.mp4',
-                      'width': None, 'height': None}]
+    assert len(media) == 1
+    assert media[0]['type'] == 'video'
+    assert media[0]['url'] == 'https://cdn/v.mp4'
+    # 无 dash manifest 时两个字段为 None，下载回退 progressive
+    assert media[0]['dash_video'] is None
+    assert media[0]['dash_audio'] is None
 
 
 def test_media_carousel():
@@ -146,3 +150,37 @@ def test_guess_ext():
     assert guess_ext('https://media.giphy.com/media/x/source.gif') == 'gif'
     assert guess_ext('https://cdn/a.webp') == 'webp'
     assert guess_ext('https://cdn/a.jpg') == 'jpg'
+
+
+def test_dash_tracks_picks_best_video_and_audio():
+    manifest = '''<MPD><Period><AdaptationSet id="0" contentType="video">
+      <Representation id="a" bandwidth="128176" width="640" height="1136">
+        <BaseURL>https://cdn/low.mp4?a=1&amp;b=2</BaseURL></Representation>
+      <Representation id="b" bandwidth="490468" width="720" height="1280">
+        <BaseURL>https://cdn/high.mp4?a=1&amp;b=2</BaseURL></Representation>
+      </AdaptationSet><AdaptationSet id="1" contentType="audio">
+      <Representation id="c" bandwidth="75783">
+        <BaseURL>https://cdn/aud.m4a?a=1&amp;b=2</BaseURL></Representation>
+    </AdaptationSet></Period></MPD>'''
+    video, audio = threads.dash_tracks(manifest)
+    assert video == 'https://cdn/high.mp4?a=1&b=2'
+    assert audio == 'https://cdn/aud.m4a?a=1&b=2'
+
+
+def test_dash_tracks_empty():
+    assert threads.dash_tracks(None) == (None, None)
+    assert threads.dash_tracks('') == (None, None)
+
+
+def test_video_media_carries_dash_urls():
+    post = {'code': 'V1', 'media_type': 2,
+            'video_versions': [{'url': 'https://cdn/prog.mp4'}],
+            'video_dash_manifest': (
+                '<AdaptationSet contentType="video"><Representation bandwidth="1">'
+                '<BaseURL>https://cdn/v.mp4</BaseURL></Representation></AdaptationSet>'
+                '<AdaptationSet contentType="audio"><Representation bandwidth="1">'
+                '<BaseURL>https://cdn/a.m4a</BaseURL></Representation></AdaptationSet>')}
+    item = threads.media_of(post)[0]
+    assert item['url'] == 'https://cdn/prog.mp4'
+    assert item['dash_video'] == 'https://cdn/v.mp4'
+    assert item['dash_audio'] == 'https://cdn/a.m4a'

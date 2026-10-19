@@ -72,6 +72,10 @@ python3 -m mediafetch "https://www.threads.com/@natgeo/post/DerqevDDeVV" --json
    媒体字段是空的，要逐条打开 `/t/{code}` 才能取到。
 7. 图片取 `candidates` 里 `width` 最大的一项，跳过头像和 `s150x150` 缩略图
    （第三方站有直接返回 150×150 的 bug）。
+8. 视频优先 DASH 合流：从 `video_dash_manifest` 里取码率最高的视频轨 + 音频轨，
+   分别下载后用 ffmpeg `-c copy` 合成 mp4。没有 ffmpeg 时回退 progressive mp4。
+   实测 progressive 与 DASH 轨是同一份编码，字节数差 146B；但 DASH 能确认拿到最高码率轨，
+   且视频帖的 `image_versions2` 只是封面帧（640 宽），不能当视频本体。
 
 ## 已知限制
 

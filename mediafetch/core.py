@@ -86,6 +86,33 @@ def fetch_first(urls, ua=BROWSER_UA, timeout=180):
     raise last
 
 
+def merge_av(video, audio, outdir, prefix, timeout=300):
+    """把 DASH 分轨的音视频合流成一个 mp4。缺 ffmpeg 就返回 None。"""
+    import shutil
+    import subprocess
+    import tempfile
+    ffmpeg = shutil.which('ffmpeg')
+    if not ffmpeg:
+        return None
+    os.makedirs(outdir, exist_ok=True)
+    path = os.path.join(outdir, f'{prefix}.mp4')
+    with tempfile.TemporaryDirectory() as tmp:
+        vpath = os.path.join(tmp, 'v.mp4')
+        apath = os.path.join(tmp, 'a.m4a')
+        for url, dest in ((video, vpath), (audio, apath)):
+            req = urllib.request.Request(url, headers={'User-Agent': BROWSER_UA})
+            with urllib.request.urlopen(req, timeout=timeout) as r:
+                with open(dest, 'wb') as f:
+                    f.write(r.read())
+        proc = subprocess.run(
+            [ffmpeg, '-y', '-loglevel', 'error', '-i', vpath, '-i', apath,
+             '-c', 'copy', '-movflags', '+faststart', path],
+            capture_output=True, text=True)
+        if proc.returncode != 0:
+            raise RuntimeError(proc.stderr.strip()[:300])
+    return path, os.path.getsize(path)
+
+
 def download(url, outdir, prefix, ua=BROWSER_UA, timeout=180):
     """url 可以是字符串，也可以是候选地址列表（按优先级尝试）。"""
     if isinstance(url, (list, tuple)):

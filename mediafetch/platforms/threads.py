@@ -39,15 +39,47 @@ SHARE_INFO_KEYS = ('quoted_post', 'reposted_post')
 
 # ---------- 单帖解析 ----------
 
+def dash_tracks(manifest):
+    """解析 video_dash_manifest，返回 (最佳视频轨 URL, 音频轨 URL)。
+
+    progressive mp4 与 DASH 轨其实是同一份编码，但 DASH 允许单独挑分辨率；
+    视频帖的 image_versions2 只是封面帧（640 宽），不是视频本体。
+    """
+    if not manifest:
+        return None, None
+    best_video = None
+    audio = None
+    for block in re.split(r'<AdaptationSet ', manifest)[1:]:
+        ctype = re.search(r'contentType="(\w+)"', block)
+        kind = ctype.group(1) if ctype else ''
+        for attrs, base in re.findall(
+                r'<Representation ([^>]+)>.*?<BaseURL>(.*?)</BaseURL>', block, re.S):
+            bw = re.search(r'bandwidth="(\d+)"', attrs)
+            if not bw or not base:
+                continue
+            url = base.replace('&amp;', '&')
+            bitrate = int(bw.group(1))
+            if kind == 'audio':
+                if audio is None or bitrate > audio[0]:
+                    audio = (bitrate, url)
+            elif kind == 'video':
+                if best_video is None or bitrate > best_video[0]:
+                    best_video = (bitrate, url)
+    return (best_video[1] if best_video else None), (audio[1] if audio else None)
+
+
 def media_of(post):
     """帖子自身的媒体列表（carousel 展开成多项）。"""
     out = []
     for node in (post.get('carousel_media') or [post]):
         videos = node.get('video_versions') or []
         if videos:
+            video_url, audio_url = dash_tracks(node.get('video_dash_manifest'))
             out.append({
                 'type': 'video',
                 'url': videos[0]['url'],
+                'dash_video': video_url,
+                'dash_audio': audio_url,
                 'width': node.get('original_width'),
                 'height': node.get('original_height'),
             })
