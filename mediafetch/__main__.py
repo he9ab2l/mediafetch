@@ -17,7 +17,8 @@ def _emit(rec, outdir):
             print(f'   saved\t{path}\t{size}')
     for i, sticker in enumerate(rec['stickers']):
         if outdir:
-            path, size = download(sticker['url'], outdir,
+            candidates = sticker.get('sources') or [sticker['url']]
+            path, size = download(candidates, outdir,
                                   f"{rec['code']}_sticker_{i + 1}_{sticker['id']}")
             print(f'   saved\t{path}\t{size}')
         else:

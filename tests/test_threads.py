@@ -104,3 +104,20 @@ def test_replies_excludes_root_and_non_replies():
 def test_claimed_replies():
     assert threads._claimed_replies('..."direct_reply_count":26,...') == 26
     assert threads._claimed_replies('nothing here') is None
+
+
+def test_sticker_has_sources_priority():
+    post = {'code': 'S', 'text_post_app_info': {'text_fragments': {'fragments': [
+        {'inline_sticker_fragment': {'sticker_id': 'abc', 'sticker_url': 'https://cdn/abc/200.gif'}},
+    ]}}}
+    st = threads.stickers_of(post)[0]
+    assert st['sources'][0].endswith('/abc/source.gif')
+    assert st['sources'][1] == 'https://i.giphy.com/abc.gif'
+
+
+def test_guess_ext():
+    from mediafetch.core import guess_ext
+    assert guess_ext('https://x/o1/v/t16/a.mp4') == 'mp4'
+    assert guess_ext('https://media.giphy.com/media/x/source.gif') == 'gif'
+    assert guess_ext('https://cdn/a.webp') == 'webp'
+    assert guess_ext('https://cdn/a.jpg') == 'jpg'

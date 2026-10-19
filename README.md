@@ -60,6 +60,9 @@ python3 -m mediafetch "https://www.threads.com/@natgeo/post/DerqevDDeVV" --json
    拿 `sticker_id`，下载用 `https://i.giphy.com/{id}.gif`。
 5. 图片取 `candidates` 里 `width` 最大的一项，跳过头像和 `s150x150` 缩略图
    （第三方站有直接返回 150×150 的 bug）。
+6. 贴图默认下载 `source.gif`（giphy 原图），失败才回退 `i.giphy.com`。
+   实测同一张：默认 480×407 / 1.6MB，source 1002×850 / 5.4MB；
+   大图能到 3360×3360。
 
 ## 已知限制
 

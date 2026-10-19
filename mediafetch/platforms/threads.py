@@ -15,6 +15,11 @@ SHARE_RE = re.compile(r'/share/([\w-]+)')
 HANDLE_RE = re.compile(r'@([\w.]+)')
 
 GIPHY = 'https://i.giphy.com/{}.gif'
+# giphy 原图比 i.giphy.com 的默认 480 宽清晰得多，按优先级尝试
+GIPHY_SOURCES = (
+    'https://media.giphy.com/media/{}/source.gif',
+    'https://i.giphy.com/{}.gif',
+)
 
 
 def media_of(post):
@@ -51,7 +56,9 @@ def stickers_of(post):
         sid = sticker.get('sticker_id')
         if sid and sid not in seen:
             seen.add(sid)
-            out.append({'id': sid, 'url': sticker.get('sticker_url') or GIPHY.format(sid)})
+            out.append({'id': sid,
+                        'url': sticker.get('sticker_url') or GIPHY.format(sid),
+                        'sources': [u.format(sid) for u in GIPHY_SOURCES]})
     return out
 
 

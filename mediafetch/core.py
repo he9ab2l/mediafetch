@@ -73,12 +73,31 @@ def guess_ext(url):
     return 'jpg'
 
 
+def fetch_first(urls, ua=BROWSER_UA, timeout=180):
+    """按顺序尝试多个候选地址，返回第一个成功的 (url, bytes)。"""
+    last = None
+    for u in urls:
+        try:
+            req = urllib.request.Request(u, headers={'User-Agent': ua})
+            with urllib.request.urlopen(req, timeout=timeout) as r:
+                return u, r.read()
+        except Exception as e:
+            last = e
+    raise last
+
+
 def download(url, outdir, prefix, ua=BROWSER_UA, timeout=180):
+    """url 可以是字符串，也可以是候选地址列表（按优先级尝试）。"""
+    if isinstance(url, (list, tuple)):
+        _, data = fetch_first(url, ua, timeout)
+        primary = url[0]
+    else:
+        primary = url
+        req = urllib.request.Request(url, headers={'User-Agent': ua})
+        with urllib.request.urlopen(req, timeout=timeout) as r:
+            data = r.read()
     os.makedirs(outdir, exist_ok=True)
-    path = os.path.join(outdir, f'{prefix}.{guess_ext(url)}')
-    req = urllib.request.Request(url, headers={'User-Agent': ua})
-    with urllib.request.urlopen(req, timeout=timeout) as r:
-        data = r.read()
+    path = os.path.join(outdir, f'{prefix}.{guess_ext(primary)}')
     with open(path, 'wb') as f:
         f.write(data)
     return path, len(data)
