@@ -1,0 +1,18 @@
+[project]
+name = "mediafetch"
+version = "0.1.0"
+description = "Fetch media from public social pages (Threads first; pluggable per platform)"
+requires-python = ">=3.9"
+license = { text = "MIT" }
+authors = [{ name = "he9ab2l" }]
+dependencies = []
+
+[project.scripts]
+mediafetch = "mediafetch.__main__:main"
+
+[build-system]
+requires = ["setuptools>=61"]
+build-backend = "setuptools.build_meta"
+
+[tool.setuptools.packages.find]
+include = ["mediafetch*"]
