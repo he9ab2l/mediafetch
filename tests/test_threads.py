@@ -1,6 +1,7 @@
 """解析层单元测试：不联网，用固定页面片段验证抽取逻辑。"""
 import json
 
+from mediafetch.page import unique_nodes
 from mediafetch.platforms import threads
 
 
@@ -66,7 +67,7 @@ def test_unique_posts_dedup_and_junk_skip():
         {'code': 'P1', 'image_versions2': {'candidates': []}},
         {'code': 'P2', 'video_versions': []},
     ]}}]]]}
-    posts = threads.unique_posts(_sjs(payload))
+    posts = unique_nodes(_sjs(payload), threads._is_post_node)
     assert [p['code'] for p in posts] == ['P1', 'P2']
 
 
@@ -145,7 +146,7 @@ def test_sticker_has_sources_priority():
 
 
 def test_guess_ext():
-    from mediafetch.core import guess_ext
+    from mediafetch.media import guess_ext
     assert guess_ext('https://x/o1/v/t16/a.mp4') == 'mp4'
     assert guess_ext('https://media.giphy.com/media/x/source.gif') == 'gif'
     assert guess_ext('https://cdn/a.webp') == 'webp'
@@ -184,3 +185,11 @@ def test_video_media_carries_dash_urls():
     assert item['url'] == 'https://cdn/prog.mp4'
     assert item['dash_video'] == 'https://cdn/v.mp4'
     assert item['dash_audio'] == 'https://cdn/a.m4a'
+
+
+def test_author_of():
+    assert threads.author_of({'user': {'username': 'a_b'}}) == 'a_b'
+    assert threads.author_of({}) == ''
+    rec = threads._record({'code': 'C', 'user': {'username': 'u1'},
+                           'image_versions2': {'candidates': []}}, 'url')
+    assert rec['author'] == 'u1'
