@@ -1,4 +1,4 @@
-"""Threads (threads.com / threads.net) 抓取器。
+"""Threads (threads.com / threads.net) 解析器。
 
 匿名访问时 Threads 返回 JS 登录墙，HTML 里没有媒体地址；换成爬虫 UA 后
 Meta 会把整篇帖子服务端渲染进 <script type="application/json" data-sjs>，
@@ -12,14 +12,17 @@ Meta 会把整篇帖子服务端渲染进 <script type="application/json" data-s
 回复翻页走 GraphQL：cursor 必须取
 data.media.text_post_app_info.direct_replies.page_info.end_cursor，
 sortOrder 用 RECENT（TOP 走不下去）。翻页返回的 node 媒体字段是空的，
-要逐条打开 /t/{code} 才能取到媒体。
+要逐条打开 /t/{code} 才能取到媒体，所以必须并发。
 """
 import json
 import re
 import urllib.parse
 import urllib.request
+from concurrent.futures import ThreadPoolExecutor
 
-from ..core import biggest_image, fetch, unique_posts
+from ..media import biggest_image
+from ..net import BROWSER_UA, fetch
+from ..page import unique_nodes
 
 POST_RE = re.compile(r'/post/([\w-]+)')
 SHARE_RE = re.compile(r'/share/([\w-]+)')
@@ -35,6 +38,13 @@ GIPHY_SOURCES = (
 GRAPHQL_URL = 'https://www.threads.com/api/graphql'
 DOWNWARD_QUERY = 'BarcelonaPostPageDownwardQuery'
 SHARE_INFO_KEYS = ('quoted_post', 'reposted_post')
+
+# 判定「这是不是一个帖子节点」：有 code 且带媒体字段
+POST_FIELDS = {'image_versions2', 'video_versions', 'carousel_media'}
+
+
+def _is_post_node(obj):
+    return bool(obj.get('code') and (POST_FIELDS & obj.keys()))
 
 
 # ---------- 单帖解析 ----------
@@ -123,6 +133,7 @@ def quoted_of(post):
         out.append({
             'kind': key,
             'code': q.get('code'),
+            'author': author_of(q),
             'media_type': q.get('media_type'),
             'caption': caption_of(q),
             'media': media_of(q),
@@ -135,12 +146,17 @@ def caption_of(post):
     return ((post.get('caption') or {}).get('text') or '').replace('\n', ' ').strip()
 
 
+def author_of(post):
+    return (post.get('user') or {}).get('username') or ''
+
+
 def _record(post, url):
     info = post.get('text_post_app_info') or {}
     return {
         'platform': 'threads',
         'code': post.get('code'),
         'url': url,
+        'author': author_of(post),
         'media_type': post.get('media_type'),
         'caption': caption_of(post),
         'is_reply': bool(info.get('is_reply')),
@@ -185,7 +201,7 @@ def _graphql(ctx, variables, referer):
         'server_timestamps': 'true',
     }).encode()
     req = urllib.request.Request(GRAPHQL_URL, data=body, headers={
-        'User-Agent': 'Mozilla/5.0 (compatible; Googlebot/2.1; +http://www.google.com/bot.html)',
+        'User-Agent': BROWSER_UA,
         'Content-Type': 'application/x-www-form-urlencoded',
         'X-FB-LSD': ctx['lsd'],
         'X-ASBD-ID': '129477',
@@ -235,17 +251,28 @@ def reply_codes(html, referer, max_pages=10):
 
 # ---------- 对外接口 ----------
 
-def post(url, reply_media=False, max_pages=10):
+def _fetch_record(code):
+    """打开一条帖子/回复页并解析成记录；失败返回 None。"""
+    try:
+        _, rhtml = fetch(f'https://www.threads.com/t/{code}')
+    except Exception:
+        return None
+    hit = [p for p in unique_nodes(rhtml, _is_post_node) if p.get('code') == code]
+    return _record(hit[0], f'https://www.threads.com/t/{code}') if hit else None
+
+
+def post(url, reply_media=False, max_pages=10, workers=16):
     """解析单帖。
 
-    reply_media=True 时逐条打开回复页补媒体（每条一次请求，慢）。
+    reply_media=True 时逐条打开回复页补媒体。这一步是整条链路最慢的环节，
+    单页约 3.7s，必须并发，否则 100+ 条回复要等十几分钟。
     """
     final, html = fetch(url)
     m = POST_RE.search(final) or POST_RE.search(url)
     if not m:
         raise SystemExit(f'不是帖子链接：{url}')
     code = m.group(1)
-    nodes = unique_posts(html)
+    nodes = unique_nodes(html, _is_post_node)
     hits = [p for p in nodes if p.get('code') == code]
     if not hits:
         raise SystemExit(f'帖子 {code} 不在页面载荷里')
@@ -256,20 +283,12 @@ def post(url, reply_media=False, max_pages=10):
     replies = _replies(nodes, code)
     if reply_media:
         have = {r['code'] for r in replies}
-        for rc in reply_codes(html, final, max_pages):
-            if rc == code or rc in have:
-                continue
-            try:
-                _, rhtml = fetch(f'https://www.threads.com/t/{rc}')
-            except Exception:
-                continue
-            hit = [p for p in unique_posts(rhtml) if p.get('code') == rc]
-            if not hit:
-                continue
-            rec = _record(hit[0], f'https://www.threads.com/t/{rc}')
-            if _has_media(rec):
-                replies.append(rec)
-                have.add(rc)
+        todo = [rc for rc in reply_codes(html, final, max_pages)
+                if rc != code and rc not in have]
+        with ThreadPoolExecutor(max_workers=workers) as ex:
+            for rec in ex.map(_fetch_record, todo):
+                if rec and _has_media(rec):
+                    replies.append(rec)
     root['replies'] = replies
     return root
 
@@ -297,7 +316,7 @@ def profile(handle, limit=50):
     handle = handle.lstrip('@')
     final, html = fetch(f'https://www.threads.com/@{handle}')
     out = []
-    for p in unique_posts(html):
+    for p in unique_nodes(html, _is_post_node):
         rec = _record(p, f'https://www.threads.com/@{handle}/post/{p.get("code")}')
         if _has_media(rec):
             out.append(rec)
