@@ -83,9 +83,11 @@ print(o.summary())
 ### 内存陷阱
 
 `MAX_BYTES = 20 MB`：gifsicle 处理一个 GIF 要吃掉同等量级的内存。
-898 MB 的机器上处理 84 MB 的文件会 OOM（实测被 OOM killer 杀掉）。
 
-`workers` 也不要开大：3 路并发在 898 MB 机器上是安全的，8 路会 OOM。
+实测在 898 MB 的东京 VM 上处理 84 MB 的文件，进程被 OOM killer 杀掉。
+现在开发机是 instabox `srv`（8 GB），`workers=4` 跑 84 MB 文件没问题。
+
+在内存小的机器上：`MAX_BYTES` 降到 10 MB，`workers` 降到 3。
 
 ## 转 webp
 

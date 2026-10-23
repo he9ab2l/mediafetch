@@ -1,5 +1,13 @@
 # 架构
 
+## 开发环境
+
+代码在 instabox 沙箱 `srv` 上开发（4 vCPU / 8 GB / `/data/workspace`），
+本地 Termux 只做小改和测试。
+
+为什么不用东京 azure1：那台只有 898 MB 内存，gifsicle 处理大 GIF 会被
+OOM killer 杀掉。`srv` 有 8 GB，跑批量优化不会 OOM。
+
 ## 依赖方向
 
 ```
