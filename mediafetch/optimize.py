@@ -19,8 +19,9 @@ MAX_BYTES = 20 * 1024 * 1024   # 单文件上限，超了跳过（内存限制�
 
 
 class Optimizer:
-    def __init__(self, root, workers=4):
+    def __init__(self, root, workers=4, log=print):
         self.root = root
+        self.log = log
         self.src_dir = os.path.join(root, 'stickers')
         self.out_dir = os.path.join(root, 'optimized')
         self.state_path = os.path.join(root, STATE)
@@ -75,7 +76,8 @@ class Optimizer:
         return name, {'status': 'ok', 'before': before, 'after': after,
                       'saved': round(saved, 3)}
 
-    def run(self, limit=None, min_bytes=100 * 1024, log=print):
+    def run(self, limit=None, min_bytes=100 * 1024, log=None):
+        log = log or self.log or (lambda *a, **k: None)
         os.makedirs(self.out_dir, exist_ok=True)
         todo = self.candidates(min_bytes)
         if limit:

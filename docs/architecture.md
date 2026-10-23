@@ -56,6 +56,19 @@ __main__  (CLI：解析参数，分发 6 个子命令)
 | `platforms/` | 某个站的字段怎么读 | HTTP、落盘 |
 | `__main__.py` | 参数解析、子命令分发、输出格式 | 业务逻辑 |
 
+## 输出与日志
+
+库模块不直接 `print`。所有会产生输出的类都接受 `log` 回调：
+
+```python
+Pipeline(root, log=print)
+Task(targets, root, log=print)
+Downloader(root, log=print)
+Optimizer(root, log=print)
+```
+
+不传就静默。这样测试里可以传 `log=lambda *_: None`，CLI 里传 `print`。
+
 ## 两个正交维度
 
 任务范围（`--scene`）和内容种类（`--only`）互不影响。

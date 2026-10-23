@@ -1,6 +1,6 @@
 [project]
 name = "mediafetch"
-version = "0.3.0"
+version = "0.3.1"
 description = "Fetch media from public social pages (Threads first; pluggable per platform)"
 requires-python = ">=3.9"
 license = { text = "MIT" }

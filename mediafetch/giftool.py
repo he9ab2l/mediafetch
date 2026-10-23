@@ -155,40 +155,62 @@ def contact_sheet(paths, dst, cols=8, cell=120, label=True):
 
 # ---------- 批量报告 ----------
 
-def survey(root, subdir='stickers', limit=None):
-    """扫一个目录，返回统计 + 异常项。"""
+def survey(root, subdir='stickers', limit=None, sample_size=SURVEY_SAMPLE):
+    """扫一个目录，返回统计 + 异常项。
+
+    只累加统计量，不把每个文件的 probe 结果留在内存里 —— 7604 个文件的
+    完整 probe 字典要好几十 MB。
+    """
     base = os.path.join(root, subdir)
     names = sorted(os.listdir(base))[:limit] if limit else sorted(os.listdir(base))
-    items, errors = [], []
+    count = 0
+    total = 0
+    frames_sum = 0
+    animated = 0
+    errors = []
+    biggest = []          # 只保留最大的 10 个
+    animated_paths = []   # 只留路径，供抽样检查
     for name in names:
         path = os.path.join(base, name)
         if not os.path.isfile(path):
             continue
         try:
-            items.append(probe(path))
+            p = probe(path)
         except Exception as e:
             errors.append((name, str(e)))
-    if not items:
+            continue
+        count += 1
+        total += p['bytes']
+        frames_sum += p['frames']
+        if p['animated']:
+            animated += 1
+            animated_paths.append(path)
+        biggest.append(p)
+        biggest.sort(key=lambda i: -i['bytes'])
+        del biggest[10:]
+    if not count:
         return {'count': 0, 'items': [], 'errors': errors}
-    total = sum(i['bytes'] for i in items)
-    animated = [i for i in items if i['animated']]
-    big = sorted(items, key=lambda i: -i['bytes'])[:10]
-    # 只抽样检查「静止动画」，全量跑会 OOM（每个 GIF 要解全部帧）
-    sample = animated[:SURVEY_SAMPLE]
-    static_anim = [i for i in sample
-                   if not any(d > 0.01 for d in frame_deltas(i['path']))]
+
+    # 均匀抽样，不用前 N 个（排序后前 N 个可能是同一批）
+    if len(animated_paths) > sample_size:
+        step = len(animated_paths) / sample_size
+        sample = [animated_paths[int(i * step)] for i in range(sample_size)]
+    else:
+        sample = animated_paths
+    static_anim = [p for p in sample
+                   if not any(d > 0.01 for d in frame_deltas(p))]
     static_anim_note = (f'（抽样 {len(sample)} 个）'
-                        if len(animated) > len(sample) else '')
+                        if len(animated_paths) > len(sample) else '')
     return {
-        'count': len(items),
+        'count': count,
         'bytes': total,
-        'animated': len(animated),
+        'animated': animated,
         'static_animation': len(static_anim),
         'static_animation_note': static_anim_note,
-        'avg_bytes': total // len(items),
-        'avg_frames': round(sum(i['frames'] for i in items) / len(items), 1),
+        'avg_bytes': total // count,
+        'avg_frames': round(frames_sum / count, 1),
         'biggest': [{'name': os.path.basename(i['path']), 'bytes': i['bytes'],
                      'frames': i['frames'], 'size': f"{i['width']}x{i['height']}"}
-                    for i in big],
+                    for i in biggest],
         'errors': errors,
     }

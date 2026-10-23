@@ -22,13 +22,14 @@ STATE = 'discover.json'
 
 
 class Pipeline:
-    def __init__(self, root, days=30, min_stickers=1, workers=16):
+    def __init__(self, root, days=30, min_stickers=1, workers=16, log=None):
         self.root = root
         os.makedirs(root, exist_ok=True)
         self.path = os.path.join(root, STATE)
         self.d = Discoverer(days=days, min_stickers=min_stickers, workers=workers)
         self.queries_done = set()
         self.profiles_done = set()
+        self.log = log
         self._load()
 
     # ---------- 状态 ----------
@@ -45,8 +46,9 @@ class Pipeline:
         for h in s.get('authors_pending', []):
             self.d.authors.add(h)
         self.d.stats.update(s.get('stats', {}))
-        print(f"续跑：已收 {len(self.d.posts)} 帖 / "
-              f"{self.d.sticker_count()} 贴图 / {len(self.d.authors)} 作者")
+        if self.log:
+            self.log(f"续跑：已收 {len(self.d.posts)} 帖 / "
+                     f"{self.d.sticker_count()} 贴图 / {len(self.d.authors)} 作者")
 
     def save(self):
         s = {
@@ -85,8 +87,9 @@ class Pipeline:
         self.save()
         return len(self.d.posts) - before
 
-    def run(self, target_stickers, max_rounds=40, log=print):
+    def run(self, target_stickers, max_rounds=40):
         """一直扩散到贴图数达标或没有新作者。"""
+        log = self.log or (lambda *a, **k: None)
         log(f"开始：目标 {target_stickers} 个贴图，时间窗 {self.d.days} 天")
         self.search_round()
         log(f"搜索后：{len(self.d.posts)} 帖 / {self.d.sticker_count()} 贴图")

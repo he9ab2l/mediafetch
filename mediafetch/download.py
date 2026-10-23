@@ -16,12 +16,12 @@ WORKERS = 24
 
 
 class Downloader:
-    def __init__(self, root, workers=WORKERS):
+    def __init__(self, root, workers=WORKERS, log=print):
         self.store = Store(root)
         self.workers = workers
+        self.log = log
         self.lock = threading.Lock()
         self.failed = []
-        self.done = 0
 
     def _fetch_one(self, sticker, source):
         """下一个贴图，返回 (rel, new) 或 None。"""
@@ -37,8 +37,9 @@ class Downloader:
                 self.failed.append((sid, f'{type(e).__name__}: {e}'))
             return None
 
-    def run(self, posts, log=print):
+    def run(self, posts, log=None):
         """posts: {code: {code, author, taken_at, stickers: [...]}}"""
+        log = log or self.log or (lambda *a, **k: None)
         jobs = []
         for code, rec in posts.items():
             author = rec.get('author') or ''

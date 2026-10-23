@@ -209,7 +209,7 @@ def build_parser():
 
 
 def cmd_discover(a):
-    pipe = Pipeline(a.root, days=a.days, workers=a.workers)
+    pipe = Pipeline(a.root, days=a.days, workers=a.workers, log=print)
     n = pipe.run(target_stickers=a.target, max_rounds=a.rounds)
     print(f'\n发现完成：{len(pipe.d.posts)} 帖 / {n} 贴图 / '
           f'{len(pipe.d.authors)} 作者')

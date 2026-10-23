@@ -23,10 +23,11 @@ class Task:
     """一次抓取任务：目标列表 + 场景 + 筛选 + 输出目录。"""
 
     def __init__(self, targets, root, scene='full', select=None,
-                 reply_pages=10, limit=50, workers=WORKERS):
+                 reply_pages=10, limit=50, workers=WORKERS, log=print):
         if scene not in SCENES:
             raise ValueError(f'未知场景 {scene}，可选 {SCENES}')
         self.targets = list(targets)
+        self.log = log
         self.scene = scene
         self.sel = select or Select.all()
         self.reply_pages = reply_pages
@@ -45,7 +46,7 @@ class Task:
 
     def _say(self, line):
         with self.lock:
-            print(line, flush=True)
+            self.log(line, flush=True)
 
     def _fail(self, prefix, exc):
         self._say(f"   FAIL\t{prefix}\t{type(exc).__name__}: {exc}")
