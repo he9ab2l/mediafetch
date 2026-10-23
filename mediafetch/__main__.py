@@ -26,11 +26,14 @@ import argparse
 import json
 import sys
 
-from .collect import SCENES, Task
+from .collect import SCENES, Task, is_post_url
+from .download import Downloader
+from .giftool import survey
+from .pipeline import Pipeline
 from .media import guess_ext
-from .net import get_bytes
 from .registry import PLATFORMS, detect
 from .select import Select
+from .store import Store
 
 
 # ---------- 子命令：list ----------
@@ -38,7 +41,7 @@ from .select import Select
 def cmd_list(a):
     name = _platform(a.target)
     spec = PLATFORMS[name]
-    if _is_post(a.target):
+    if is_post_url(a.target):
         rec = spec['post'](a.target, reply_media=a.replies,
                            max_pages=a.reply_pages)
         print(_fmt(rec))
@@ -67,7 +70,7 @@ def _fmt(rec):
 def cmd_get(a):
     name = _platform(a.target)
     spec = PLATFORMS[name]
-    if _is_post(a.target):
+    if is_post_url(a.target):
         records = [spec['post'](a.target, reply_media=a.replies,
                                 max_pages=a.reply_pages)]
     else:
@@ -79,18 +82,18 @@ def cmd_get(a):
 
     sel = _select(a)
     seen = set()
+    store = Store(a.out) if a.dl else None
     for rec in records:
         print(_fmt(rec))
-        _flat(rec, a.out if a.dl else None, sel, seen)
+        _flat(rec, store, sel, seen)
         for r in (rec.get('replies') or []) if a.replies else []:
-            _flat(r, a.out if a.dl else None, sel, seen)
+            _flat(r, store, sel, seen)
 
 
-def _flat(rec, outdir, sel, seen):
-    from .store import Store
-    if not outdir:
+def _flat(rec, store, sel, seen):
+    """平铺下载一条记录的媒体和贴图。store 由调用方复用，避免重读 manifest。"""
+    if store is None:
         return
-    store = Store(outdir)
     for item in sel.pick_media(rec):
         if item['url'] in seen:
             continue
@@ -139,10 +142,6 @@ def _select(a):
     return Select.only(*a.only.split(','))
 
 
-def _is_post(target):
-    return any(seg in target for seg in ('/post/', '/t/', '/share/'))
-
-
 def _platform(target):
     name = detect(target) if '//' in target else None
     if name is None and target.startswith('@'):
@@ -185,7 +184,62 @@ def build_parser():
     p.add_argument('--dry-run', action='store_true', help='只抓元数据不下载')
     common(p)
     p.set_defaults(func=cmd_archive)
+
+    p = sub.add_parser('discover', help='自动发现最近 N 天带贴图的帖子')
+    p.add_argument('root', help='工作目录（存 discover.json 状态）')
+    p.add_argument('--days', type=int, default=30, help='时间窗，默认 30 天')
+    p.add_argument('--target', type=int, default=9000, help='目标贴图数')
+    p.add_argument('--rounds', type=int, default=80, help='最多扩散几轮')
+    p.add_argument('--workers', type=int, default=16)
+    p.set_defaults(func=cmd_discover)
+
+    p = sub.add_parser('fetch', help='按发现结果下载贴图')
+    p.add_argument('root', help='工作目录（读 discover.json）')
+    p.add_argument('--archive', required=True, help='贴图输出目录')
+    p.add_argument('--workers', type=int, default=24)
+    p.set_defaults(func=cmd_fetch)
+
+    p = sub.add_parser('gif', help='GIF 体检与转换')
+    p.add_argument('root', help='存档根目录')
+    p.add_argument('--dir', default='stickers')
+    p.add_argument('--limit', type=int)
+    p.add_argument('--json', action='store_true')
+    p.set_defaults(func=cmd_gif)
     return ap
+
+
+def cmd_discover(a):
+    pipe = Pipeline(a.root, days=a.days, workers=a.workers)
+    n = pipe.run(target_stickers=a.target, max_rounds=a.rounds)
+    print(f'\n发现完成：{len(pipe.d.posts)} 帖 / {n} 贴图 / '
+          f'{len(pipe.d.authors)} 作者')
+    print(f'状态：{pipe.path}')
+
+
+def cmd_fetch(a):
+    import json as _json
+    pipe = Pipeline(a.root, workers=a.workers)
+    dl = Downloader(a.archive, workers=a.workers)
+    r = dl.run(pipe.d.posts)
+    print(_json.dumps(r, ensure_ascii=False))
+
+
+def cmd_gif(a):
+    import json as _json
+    rep = survey(a.root, a.dir, a.limit)
+    if a.json:
+        print(_json.dumps(rep, ensure_ascii=False, indent=2))
+        return
+    print(f"文件 {rep['count']} 个，共 {rep['bytes']//1048576} MB，"
+          f"平均 {rep['avg_bytes']//1024} KB / {rep['avg_frames']} 帧")
+    note = rep.get('static_animation_note', '')
+    print(f"动图 {rep['animated']}，看着像动图其实静止 {rep['static_animation']}{note}")
+    print('\n最大的 10 个：')
+    for b in rep['biggest']:
+        print(f"  {b['bytes']//1024:5d} KB  {b['frames']:3d} 帧  "
+              f"{b['size']:>10s}  {b['name']}")
+    if rep['errors']:
+        print(f"\n{len(rep['errors'])} 个读取失败")
 
 
 def main(argv=None):

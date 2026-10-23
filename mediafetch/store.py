@@ -111,16 +111,21 @@ class Store:
 
     # ---------- 对外：三类内容 ----------
 
-    def save_sticker(self, sticker, source):
-        """贴图进表情池，文件名就是 sticker id，天然不重复。"""
+    def save_sticker(self, sticker, source, data=None):
+        """贴图进表情池，文件名就是 sticker id，天然不重复。
+
+        data 给了就直接落盘（调用方自己下载），没给就自己下。
+        """
         sid = safe_name(sticker['id'])
         key = os.path.join('stickers', sid)
         if key in self.done:
             self.skipped += 1
             return None, False
         cands = list(sticker.get('sources') or [sticker['url']])
-        _, data = get_first(cands)
-        dest = os.path.join(self.root, 'stickers', f'{sid}.{media.guess_ext(cands[0])}')
+        if data is None:
+            _, data = get_first(cands)
+        dest = os.path.join(self.root, 'stickers',
+                            f'{sid}.{media.guess_ext(cands[0])}')
         return self._write(data, dest, key, kind='sticker', sticker_id=sid,
                            source=source)
 

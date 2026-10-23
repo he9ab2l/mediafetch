@@ -162,7 +162,7 @@ class Task:
 
     def run(self):
         for target in self.targets:
-            if _is_post(target):
+            if is_post_url(target):
                 self._run_post_scene(target)
             else:
                 self.do_profile(target)
@@ -192,5 +192,6 @@ class Task:
         return self.report
 
 
-def _is_post(target):
+def is_post_url(target):
+    """判断一个目标是不是帖子链接（否则当账号处理）。"""
     return any(seg in target for seg in ('/post/', '/t/', '/share/'))
