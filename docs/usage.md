@@ -4,6 +4,33 @@
 
 ---
 
+## 不给链接：自动发现
+
+从零开始找最近一个月的表情：
+
+```bash
+# 阶段一：发现（可中断续跑，约 70 分钟到 7000+ 贴图）
+python3 -m mediafetch discover ~/work --days 30 --target 9000
+
+# 阶段二：下载
+python3 -m mediafetch fetch ~/work --archive ~/stickers
+```
+
+`--days 30` 是时间窗，`--target` 是目标贴图数。发现会一直扩散直到达标
+或作者池耗尽。中断后再跑同一条命令会从断点继续。
+
+**时间估计**：5000 贴图约 25 分钟，7600 贴图约 70 分钟。瓶颈是翻主页
+（3.7 万个请求）。
+
+## GIF 体检
+
+```bash
+python3 -m mediafetch gif ~/stickers           # 看报告
+python3 -m mediafetch gif ~/stickers --json    # 机读
+```
+
+报告体积、帧数、尺寸分布，找出最大的 10 个和「看着像动图其实静止」的。
+
 ## 只要表情
 
 ```bash

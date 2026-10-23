@@ -3,9 +3,9 @@
 ## 依赖方向
 
 ```
-__main__  (CLI：解析参数，分发子命令)
+__main__  (CLI：解析参数，分发 6 个子命令)
    │
-   ├─> collect     (编排：抓取 → 筛选 → 存档)
+   ├─> collect     (给链接的场景：抓取 → 筛选 → 存档)
    │      │
    │      ├─> store    (落盘布局 + 两级去重 + manifest)
    │      ├─> select   (筛选规则，纯函数)
@@ -14,6 +14,16 @@ __main__  (CLI：解析参数，分发子命令)
    │                   ├─> net    (HTTP：重试、UA、取字节)
    │                   ├─> page   (从 HTML 挖 SSR JSON)
    │                   └─> media  (URL 分类、扩展名、DASH 合流)
+   │
+   ├─> pipeline    (不给链接：发现流水线，状态持久化)
+   │      └─> discover  (搜索页 + 主页扩散，按时间窗过滤)
+   │
+   ├─> download    (按发现结果批量下载)
+   │      └─> store
+   │
+   ├─> giftool    (GIF 探测 / 优化 / 转换 / 拼图)
+   ├─> optimize   (批量优化，断点续跑)
+   │      └─> giftool
    │
    └─> registry    (域名 → 平台名)
 ```
@@ -30,6 +40,11 @@ __main__  (CLI：解析参数，分发子命令)
 | `select.py` | 这次任务要哪些类型（sticker/image/video） | 抓取、落盘 |
 | `store.py` | 文件放哪、sha256 去重、manifest 记账 | 抓取、筛选 |
 | `collect.py` | 按场景串起三个动作 | 解析细节、落盘细节 |
+| `discover.py` | 搜索页 + 主页扩散，按时间窗过滤 | 落盘、下载 |
+| `pipeline.py` | 发现状态持久化、多轮扩散、续跑 | 具体抓取逻辑 |
+| `download.py` | 按发现结果批量下载贴图 | 发现逻辑 |
+| `giftool.py` | GIF 探测、优化、转换、拼图 | 批量调度 |
+| `optimize.py` | 批量优化调度、状态、收益门槛 | GIF 具体处理 |
 | `platforms/` | 某个站的字段怎么读 | HTTP、落盘 |
 | `__main__.py` | 参数解析、子命令分发、输出格式 | 业务逻辑 |
 
